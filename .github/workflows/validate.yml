@@ -55,9 +55,10 @@ jobs:
           node -e "
           const fs=require('fs');
           const d=JSON.parse(fs.readFileSync('data/verified_streams.json'));
-          console.log('generatedAt:',d.generatedAt);
-          console.log('totalAlive:',d.totalAlive,'/',d.totalProbed);
-          console.log('channels:',d.namedChannels);
+          console.log('generatedAt:    ',d.generatedAt);
+          console.log('totalAlive:     ',d.totalAlive,'/',d.totalProbed);
+          console.log('rescuedHeaders: ',d.rescuedByHeaders);
+          console.log('channels:       ',d.namedChannels);
           "
 
       - name: Commit updated list

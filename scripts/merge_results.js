@@ -12,12 +12,14 @@ const BATCHES = 5;
 const allAlive = [];
 let totalProbed = 0;
 
+let totalRetried = 0;
 for (let i = 0; i < BATCHES; i++) {
   const f = path.join(dir, `results_${i}.json`);
   const r = JSON.parse(fs.readFileSync(f));
   allAlive.push(...r.streams);
-  totalProbed += r.total;
-  console.log(`Batch ${i}: ${r.alive} vivos / ${r.total}`);
+  totalProbed  += r.total;
+  totalRetried += (r.retried || 0);
+  console.log(`Batch ${i}: ${r.alive} vivos / ${r.total} (${r.retried || 0} por headers)`);
 }
 
 // Deduplicate by URL (just in case)
@@ -76,6 +78,7 @@ const output = {
   generatedAt:     new Date().toISOString(),
   totalProbed,
   totalAlive:      unique.length,
+  rescuedByHeaders: totalRetried,
   namedChannels:   namedChannels.length,
   orphanStreams:   orphans.length,
   channels:        namedChannels,
@@ -86,9 +89,10 @@ const outPath = path.join(rootDir, 'data', 'verified_streams.json');
 if (!fs.existsSync(path.join(rootDir, 'data'))) fs.mkdirSync(path.join(rootDir, 'data'), { recursive: true });
 fs.writeFileSync(outPath, JSON.stringify(output));
 
-console.log(`\nTotal probados : ${totalProbed}`);
-console.log(`Total vivos    : ${unique.length} (${((unique.length/totalProbed)*100).toFixed(1)}%)`);
-console.log(`Canales con ID : ${namedChannels.length}`);
-console.log(`Streams huérfanos: ${orphans.length}`);
-console.log(`Escrito en     : ${outPath}`);
-console.log(`Tamaño         : ${(fs.statSync(outPath).size / 1024 / 1024).toFixed(2)} MB`);
+console.log(`\nTotal probados    : ${totalProbed}`);
+console.log(`Total vivos       : ${unique.length} (${((unique.length/totalProbed)*100).toFixed(1)}%)`);
+console.log(`Rescatados headers: ${totalRetried}`);
+console.log(`Canales con ID    : ${namedChannels.length}`);
+console.log(`Streams huérfanos : ${orphans.length}`);
+console.log(`Escrito en        : ${outPath}`);
+console.log(`Tamaño            : ${(fs.statSync(outPath).size / 1024 / 1024).toFixed(2)} MB`);

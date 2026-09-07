@@ -1,0 +1,74 @@
+name: Validate IPTV Streams
+
+on:
+  schedule:
+    # Runs every 3 days at 02:00 UTC
+    - cron: '0 2 */3 * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual run'
+        required: false
+        default: 'Manual validation'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download fresh iptv-org data
+        run: |
+          curl -sL https://iptv-org.github.io/api/streams.json  -o scripts/streams_raw.json
+          curl -sL https://iptv-org.github.io/api/channels.json -o scripts/channels_raw.json
+          echo "streams.json:  $(wc -l < scripts/streams_raw.json) lines"
+          echo "channels.json: $(wc -l < scripts/channels_raw.json) lines"
+
+      - name: Split into 5 batches
+        run: node scripts/prepare_batches.js
+
+      - name: Test all streams in parallel (5 batches x ~3400 streams)
+        run: |
+          node scripts/test_batch.js 0 &
+          node scripts/test_batch.js 1 &
+          node scripts/test_batch.js 2 &
+          node scripts/test_batch.js 3 &
+          node scripts/test_batch.js 4 &
+          wait
+          echo "All batches complete"
+
+      - name: Merge results → data/verified_streams.json
+        run: node scripts/merge_results.js
+
+      - name: Show summary
+        run: |
+          node -e "
+          const fs = require('fs');
+          const d  = JSON.parse(fs.readFileSync('data/verified_streams.json'));
+          console.log('generatedAt  :', d.generatedAt);
+          console.log('totalProbed  :', d.totalProbed);
+          console.log('totalAlive   :', d.totalAlive, '(' + (d.totalAlive/d.totalProbed*100).toFixed(1) + '%)');
+          console.log('namedChannels:', d.namedChannels);
+          console.log('orphanStreams :', d.orphanStreams);
+          console.log('fileSizeMB   :', (fs.statSync('data/verified_streams.json').size/1024/1024).toFixed(2));
+          "
+
+      - name: Commit and push updated list
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/verified_streams.json
+          git diff --cached --quiet && echo "No changes" || \
+            git commit -m "chore: update verified streams [$(date -u '+%Y-%m-%d')]" && \
+            git push

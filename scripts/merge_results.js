@@ -9,6 +9,13 @@ const dir     = __dirname;                          // scripts/
 const rootDir = path.join(dir, '..');               // repo root
 const BATCHES = 5;
 
+// Load blacklist
+const blacklistPath = path.join(rootDir, 'data', 'blacklist.json');
+const blacklist = new Set(
+  fs.existsSync(blacklistPath) ? JSON.parse(fs.readFileSync(blacklistPath)) : []
+);
+if (blacklist.size > 0) console.log(`Blacklist cargada: ${blacklist.size} canales bloqueados`);
+
 const allAlive = [];
 let totalProbed = 0;
 
@@ -22,13 +29,16 @@ for (let i = 0; i < BATCHES; i++) {
   console.log(`Batch ${i}: ${r.alive} vivos / ${r.total} (${r.retried || 0} por headers)`);
 }
 
-// Deduplicate by URL (just in case)
+// Deduplicate by URL and apply blacklist
 const seen = new Set();
 const unique = allAlive.filter(s => {
   if (seen.has(s.url)) return false;
   seen.add(s.url);
+  if (s.channelId && blacklist.has(s.channelId)) return false;
   return true;
 });
+const blockedCount = allAlive.length - unique.length;
+if (blockedCount > 0) console.log(`Streams bloqueados por blacklist: ${blockedCount}`);
 
 // Build channel map: channelId → best stream URL (first alive)
 const channelMap = {};
